@@ -33,26 +33,17 @@ int main(int argc, const char** argv)
 	const uint32_t hardware_id = 0;
 	const VkDeviceSize transfer_size = 16 << 20; // 16MB
 
-	VkApplicationInfo app_info = {
-		VK_STRUCTURE_TYPE_APPLICATION_INFO,		// sType
-		nullptr,								// pNext
-		appName,								// pApplicationName
-		VK_MAKE_VERSION(1, 0, 0),				// applicationVersion
-		engineName,								// pEngineName
-		VK_MAKE_VERSION(1, 0, 0),				// engineVersion
-		VK_API_VERSION_1_0,						// apiVersion
-	};
+	VkApplicationInfo app_info = {};
+	app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	app_info.pApplicationName = appName;
+	app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+	app_info.pEngineName = engineName;
+	app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+	app_info.apiVersion = VK_API_VERSION_1_0;
 
-	VkInstanceCreateInfo instance_info = {
-		VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,					// sType
-		nullptr,												// pNext <-- &debug_info
-		0,														// flags
-		&app_info,												// pApplicationInfo
-		0,														// enabledLayerCount
-		nullptr,												// ppEnabledLayerNames
-		0,														// enabledExtensionCount
-		nullptr,													// ppEnabledExtensionNames
-	};
+	VkInstanceCreateInfo instance_info = {};
+	instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+	instance_info.pApplicationInfo = &app_info;
 
 	VkInstance instance;
 	assert(vkCreateInstance(&instance_info, nullptr, &instance) == VK_SUCCESS);
@@ -68,25 +59,10 @@ int main(int argc, const char** argv)
 	VkQueueFamilyProperties* family_prop = static_cast<VkQueueFamilyProperties*>(malloc(sizeof(VkQueueFamilyProperties) * family_count + 1));
 	vkGetPhysicalDeviceQueueFamilyProperties(hardware[hardware_id], &family_count, family_prop);
 
-	uint32_t compute_family = family_count;
-	uint32_t transfer_family = family_count;
-
 	const float priority[] = { 1.f };
 	VkDeviceQueueCreateInfo* queue_info = static_cast<VkDeviceQueueCreateInfo*>(malloc(sizeof(VkDeviceQueueCreateInfo) * family_count + 1));
 	for (uint32_t i = 0; i < family_count; i++)
 	{
-		if (family_prop[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT))
-		{
-			if (i < compute_family)
-			{
-				compute_family = i;
-			}
-		}
-		else if (family_prop[i].queueFlags & VK_QUEUE_TRANSFER_BIT)
-		{
-			transfer_family = i;
-		}
-
 		queue_info[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 		queue_info[i].pNext = nullptr;
 		queue_info[i].flags = 0;
@@ -94,22 +70,11 @@ int main(int argc, const char** argv)
 		queue_info[i].queueCount = 1;
 		queue_info[i].pQueuePriorities = priority;
 	}
-
-	assert(compute_family < family_count && "No compute queue family");
-	assert(transfer_family < family_count && "No transfer-only queue family");
-
-	VkDeviceCreateInfo device_info = {
-		VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-		nullptr,
-		0,
-		family_count,
-		queue_info,
-		0,
-		nullptr,
-		0,
-		nullptr,
-		nullptr,
-	};
+		
+	VkDeviceCreateInfo device_info = {};
+	device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	device_info.queueCreateInfoCount = family_count;
+	device_info.pQueueCreateInfos = queue_info;
 
 	VkDevice device;
 	assert(vkCreateDevice(hardware[hardware_id], &device_info, nullptr, &device) == VK_SUCCESS);
@@ -117,6 +82,7 @@ int main(int argc, const char** argv)
 	VkCommandPool* cmd_pool = static_cast<VkCommandPool*>(malloc(sizeof(VkCommandPool) * family_count + 1));
 	VkCommandBuffer* cmd_buf = static_cast<VkCommandBuffer*>(malloc(sizeof(VkCommandBuffer) * family_count + 1));
 	VkQueryPool* query_pool = static_cast<VkQueryPool*>(malloc(sizeof(VkQueryPool) * family_count + 1));
+	VkQueue* queues = static_cast<VkQueue*>(malloc(sizeof(VkQueue) * family_count + 1));
 	for (uint32_t i = 0; i < family_count; i++)
 	{
 		VkCommandPoolCreateInfo cpi = {
@@ -126,7 +92,7 @@ int main(int argc, const char** argv)
 			i,
 		};
 
-		assert(vkCreateCommandPool(device, &cpi, nullptr, cmd_pool + i) == VK_SUCCESS);
+		assert(vkCreateCommandPool(device, &cpi, nullptr, &cmd_pool[i]) == VK_SUCCESS);
 
 		VkCommandBufferAllocateInfo cbi = {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -147,6 +113,8 @@ int main(int argc, const char** argv)
 			0,
 		};
 		assert(vkCreateQueryPool(device, &query_info, nullptr, &query_pool[i]) == VK_SUCCESS);
+
+		vkGetDeviceQueue(device, i, 0, &queues[i]);
 	}
 		
 	VkBufferCreateInfo buffer_info[] = {
@@ -207,82 +175,44 @@ int main(int argc, const char** argv)
 	assert(vkAllocateMemory(device, &alloc_info[1], nullptr, &mem[1]) == VK_SUCCESS);
 	assert(vkBindBufferMemory(device, buf[1], mem[1], 0) == VK_SUCCESS);
 
-	const uint32_t families[2] = { compute_family, transfer_family };
-	VkQueue queues[2];
-
-	for (uint32_t i = 0; i < 2; i++)
-	{		
-		VkCommandBuffer cb = cmd_buf[families[i]];
-
-		VkCommandBufferBeginInfo begin_info = {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			nullptr,
-			VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-			nullptr,
-		};
-		assert(vkBeginCommandBuffer(cb, &begin_info) == VK_SUCCESS);
-
-		vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query_pool[families[i]], 0);
-
-		VkBufferCopy buf_copy = {
-			0,
-			0,
-			transfer_size,
-		};
-		vkCmdCopyBuffer(cb, buf[0], buf[1], 1, &buf_copy);
-
-		vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query_pool[families[i]], 1);
-
-		assert(vkEndCommandBuffer(cb) == VK_SUCCESS);
-
-		vkGetDeviceQueue(device, families[i], 0, &queues[i]);
-	}
-
-	VkSubmitInfo submit_info[] = {
-		{
-			VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			nullptr,
-			0,
-			nullptr,
-			nullptr,
-			1,
-			&cmd_buf[families[0]],
-			0,
-			nullptr,
-		},
-		{
-			VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			nullptr,
-			0,
-			nullptr,
-			nullptr,
-			1,
-			&cmd_buf[families[1]],
-			0,
-			nullptr,
-		},
-	};
-
-	VkQueue queue[2];
-
-	assert(vkQueueSubmit(queues[0], 1, &submit_info[0], VK_NULL_HANDLE) == VK_SUCCESS);
-	assert(vkQueueWaitIdle(queues[0]) == VK_SUCCESS);
-
-	assert(vkQueueSubmit(queues[1], 1, &submit_info[1], VK_NULL_HANDLE) == VK_SUCCESS);
-	assert(vkQueueWaitIdle(queues[1]) == VK_SUCCESS);
-
-	size_t timings[4];
-	assert(vkGetQueryPoolResults(device, query_pool[families[0]], 0, 2, sizeof(size_t) * 2, timings + 0, sizeof(size_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT) == VK_SUCCESS);
-	assert(vkGetQueryPoolResults(device, query_pool[families[1]], 0, 2, sizeof(size_t) * 2, timings + 2, sizeof(size_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT) == VK_SUCCESS);
-
-	for (uint32_t i = 0; i < 4; i++)
+	for (uint32_t i = 0; i < family_count; i++)
 	{
-		if ((i & 1) == 0) {
-			printf("Queue family %u\n", families[i >> 1]);
+		if (family_prop[i].timestampValidBits)
+		{
+			VkCommandBuffer cb = cmd_buf[i];
+
+			VkCommandBufferBeginInfo begin_info = {};
+			begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+			assert(vkBeginCommandBuffer(cb, &begin_info) == VK_SUCCESS);
+
+			vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query_pool[i], 0);
+
+			VkBufferCopy buf_copy = {};
+			buf_copy.size = transfer_size;
+			vkCmdCopyBuffer(cb, buf[0], buf[1], 1, &buf_copy);
+
+			vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query_pool[i], 1);
+
+			assert(vkEndCommandBuffer(cb) == VK_SUCCESS);
+
+			VkSubmitInfo submit_info = {};
+			submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			submit_info.commandBufferCount = 1;
+			submit_info.pCommandBuffers = &cmd_buf[i];
+			assert(vkQueueSubmit(queues[i], 1, &submit_info, VK_NULL_HANDLE) == VK_SUCCESS);
+			assert(vkQueueWaitIdle(queues[i]) == VK_SUCCESS);
+
+			size_t timings[2];
+			assert(vkGetQueryPoolResults(device, query_pool[i], 0, 2, sizeof(size_t) * 2, timings, sizeof(size_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT) == VK_SUCCESS);
+
+			printf("Queue family %u\n", i);
+			printf("  %llu\n", timings[0]);
+			printf("  %llu\n", timings[1]);
 		}
-		printf("  %llu = %llu\n", i, timings[i]);
 	}
+
+	printf("All done.\n");
 	
-	getchar();
 	return 0;
 }
