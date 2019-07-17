@@ -1,4 +1,3 @@
-#include <windows.h>
 #include <vulkan.h>
 #include <stdlib.h>
 #include <assert.h>
