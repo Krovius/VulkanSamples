@@ -212,7 +212,7 @@ int main(int argc, const char** argv)
 	VkQueue queues[2];
 
 	for (uint32_t i = 0; i < 2; i++)
-	{
+	{		
 		VkCommandBuffer cb = cmd_buf[families[i]];
 
 		VkCommandBufferBeginInfo begin_info = {
@@ -278,7 +278,10 @@ int main(int argc, const char** argv)
 
 	for (uint32_t i = 0; i < 4; i++)
 	{
-		printf("%llu = %llu\n", i, timings[i]);
+		if ((i & 1) == 0) {
+			printf("Queue family %u\n", families[i >> 1]);
+		}
+		printf("  %llu = %llu\n", i, timings[i]);
 	}
 	
 	getchar();
