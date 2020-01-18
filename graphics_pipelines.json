@@ -1,0 +1,47 @@
+{
+  "graphics": [
+    {
+      "name": "gfx1",
+      "shaders": [
+        { "name": "vert1", "stage": "vertex" },
+        { "name": "frag1", "stage": "fragment" }
+      ],
+      "bindings": [
+        {
+          "id": 0,
+          "stride": 16,
+          "rate": "vertex"
+        },
+        {
+          "id": 1,
+          "stride": 8,
+          "rate": "vertex"
+        }
+      ],
+      "attributes": [
+        {
+          "location": 0,
+          "binding": 0,
+          "format": "r32g32b32a32.sfloat",
+          "offset": 0
+        },
+        {
+          "location": 1,
+          "binding": 1,
+          "format": "r32g32.sfloat",
+          "offset": 0
+        }
+      ],
+      "topology": "triangles",
+      "viewports": [ {} ],
+      "scissors": [ {} ],
+      "blend": [
+        { "mask": [ "r", "b", "g", "a" ] }
+      ],
+      "depth": {},
+      "dynamic": [ "viewport", "scissor" ],
+      "pipeline": "layoutQ",
+      "renderpass": "rp1"
+    }
+  ]
+}
