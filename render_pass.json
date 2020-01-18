@@ -1,32 +1,42 @@
 {
   "items": [
     {
-      "name": "renderpass/rp1",
+      "name": "rp1",
+      "dependencies": [
+        {
+          "source": {
+            "stage": [ "top" ]
+          },
+          "target": {
+            "subpass": 0,
+            "stage": [ "color.output" ],
+            "access": [ "color.write" ]
+          }
+        },
+        {
+          "source": {
+            "stage": [ "color.output" ],
+            "access": [ "color.write" ],
+            "subpass": 0
+          },
+          "target": {
+            "stage": [ "transfer" ],
+            "access": [ "upload" ]
+          }
+        }
+      ],
       "attachments": [
         {
           "format": "r8g8b8a8.unorm",
           "load.op": "clear",
           "store.op": "store",
-          "final.layout": "upload"
+          "final.layout": "color"
         },
         {
           "format": "d16.unorm",
           "load.op": "clear",
+          "store.op": "store",
           "final.layout": "depth"
-        }
-      ],
-      "dependencies": [
-        {
-          "source": {
-            "subpass": null,
-            "stage": [],
-            "access": []
-          },
-          "target": {
-            "subpass": 0,
-            "stage": [ "fragment" ],
-            "access": [ "color.read", "color.write" ]
-          }
         }
       ],
       "passes": [
