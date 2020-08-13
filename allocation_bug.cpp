@@ -1,4 +1,3 @@
-#include <Windows.h>
 #include <vulkan.h>
 #include <cassert>
 #include <cstdio>
